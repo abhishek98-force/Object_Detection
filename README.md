@@ -1,2 +1,3 @@
 # visualobjects
-objects that are in the visual field
+
+identifying and demarcating objects from images and videos using sota libraries/ecosystem for object detection
