@@ -13,3 +13,8 @@ services:
       context: ./image-det-backend
     ports:
       - '5000:5000'
+    volumes:
+      - db-data:/app/instance
+
+volumes:
+  db-data:
