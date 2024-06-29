@@ -128,7 +128,7 @@ def get_rectangle_vertices(rectangles):
 @app.route('/')
 
 def index():
-    return "Hello World"
+    return "Visual objects"
 
 @app.route('/api/images', methods=['POST'])
 def insertImgAndReturnRec():
