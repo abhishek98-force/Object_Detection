@@ -6,12 +6,11 @@ import cv2
 import numpy as np
 from io import BytesIO
 import base64
+from ultralytics import YOLO
 
 from coordinate import Coordinate
 
 app = Flask(__name__)
-
-
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 CORS(app)
@@ -60,75 +59,97 @@ def filter_and_extract_rectangles(contours, threshold_area):
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
         if w * h > threshold_area:  # Filter out small rectangles
-            rectangles.append((x, y, x + w, y + h))
+            rectangles.append(((x, y, x + w, y + h), None))
+    rectangles = merge_overlapping_rectangles(rectangles)
     return rectangles
 
-def merge_rectangles(rectangles):
-    if not rectangles:
-        return []
+def merge_overlapping_rectangles(rectangles_with_labels):
+    merged_rectangles_with_labels = []
+    rectangles = [rect for rect, _ in rectangles_with_labels]
+    labels = [label for _, label in rectangles_with_labels]
 
-    merged = True
-    while merged:
+    while rectangles:
+        rect = rectangles.pop(0)
+        label = labels.pop(0)
         merged = False
-        new_rectangles = []
-        while rectangles:
-            r1 = rectangles.pop()
-            if not rectangles:
-                new_rectangles.append(r1)
+        for i in range(len(rectangles)):
+            other_rect = rectangles[i]
+            other_label = labels[i]
+            if rectangles_overlap(rect, other_rect):
+                merged_rect = merge_two_rectangles(rect, other_rect)
+                rectangles.pop(i)
+                labels.pop(i)
+                if other_label is not None:
+                    label = other_label  # Model label takes precedence
+                rectangles.append(merged_rect)
+                labels.append(label)
+                merged = True
                 break
-            merged_rectangles = []
-            for r2 in rectangles:
-                if (r1[0] < r2[2] and r1[2] > r2[0] and
-                    r1[1] < r2[3] and r1[3] > r2[1]):
-                    r1 = (min(r1[0], r2[0]), min(r1[1], r2[1]),
-                          max(r1[2], r2[2]), max(r1[3], r2[3]))
-                    merged = True
-                else:
-                    merged_rectangles.append(r2)
-            rectangles = merged_rectangles
-            new_rectangles.append(r1)
-        rectangles = new_rectangles
-    return rectangles
+        if not merged:
+            merged_rectangles_with_labels.append((rect, label))
+    return merged_rectangles_with_labels
 
-def find_and_merge_rectangles(image, threshold_area=100):
-    # Preprocess image
-    blurred = preprocess_image(image)
+def rectangles_overlap(rect1, rect2):
+    return not (rect1[2] < rect2[0] or rect1[0] > rect2[2] or rect1[3] < rect2[1] or rect1[1] > rect2[3])
 
-    # Apply threshold
-    # thresh = apply_threshold(blurred)
+def merge_two_rectangles(rect1, rect2):
+    x1 = min(rect1[0], rect2[0])
+    y1 = min(rect1[1], rect2[1])
+    x2 = max(rect1[2], rect2[2])
+    y2 = max(rect1[3], rect2[3])
+    return (x1, y1, x2, y2)
 
-    # Find contours
-    contours = find_contours(blurred)
+def add_yolov8_detections(image, score_threshold=0.5):
 
-    # Filter and extract rectangles
-    rectangles = filter_and_extract_rectangles(contours, threshold_area)
+    model = YOLO('yolov8l.pt')
+    results = model(image)
+    result = results[0] 
+    boxes = result.boxes
 
-    # Merge rectangles
-    merged_rectangles = merge_rectangles(rectangles)
+    model_rectangles_with_labels = []
+    detection_boxes = boxes.xyxy.cpu().numpy()
+    detection_scores = boxes.conf.cpu().numpy()
+    detection_classes = boxes.cls.cpu().numpy().astype(int)
 
-    # Prepare the final list of rectangles
-    final_rectangles = [[(x1, y1), (x2, y2)] for (x1, y1, x2, y2) in merged_rectangles]
+    for i in range(len(detection_boxes)):
+        if detection_scores[i] >= score_threshold:
+            box = detection_boxes[i]
+            x_min, y_min, x_max, y_max = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+            label_int = detection_classes[i]
+            label_str = results[0].names.get(label_int)
+            model_rectangles_with_labels.append(((x_min, y_min, x_max, y_max), label_str))
+    
+    return model_rectangles_with_labels
 
+
+def merge_rectangles_from_model_and_opencv(image, score_threshold=0.5, threshold_area=10):
+    final_rectangles = []
+    try:
+        blurred_img = preprocess_image(image)
+        contours = find_contours(blurred_img)
+        final_rectangles_with_labels = filter_and_extract_rectangles(contours, threshold_area)
+
+        model_rectangles_with_labels = add_yolov8_detections(image, score_threshold)
+        all_rectangles_with_labels = final_rectangles_with_labels + model_rectangles_with_labels
+
+        final_rectangles = [[(x1, y1), (x2, y2), label] for ((x1, y1, x2, y2), label) in all_rectangles_with_labels]
+    except Exception as e:  
+        print(e)
     return final_rectangles
-
-# Flask route
 
 def get_rectangle_vertices(rectangles):
     rectangle_vertices = []
     for rectangle in rectangles:
-       (x1, y1), (x2, y2) = rectangle
+       (x1, y1), (x2, y2), label = rectangle
        rectangle_vertices.append([(x1, y1),(x2,y1),(x2, y2),(x1,y2)])
 
     print(rectangle_vertices)
     return rectangle_vertices
-      
-
-
     
 @app.route('/')
 
 def index():
-    return "Hello World"
+    return "Visual objects"
 
 @app.route('/api/images', methods=['POST'])
 def insertImgAndReturnRec():
@@ -138,9 +159,9 @@ def insertImgAndReturnRec():
         new_img = Image(data_url = data['image_url'])
         base64_bytes = base64.b64decode(data['image_url'])
         image_data = BytesIO(base64_bytes)
+        image = cv2.imdecode(np.frombuffer(image_data.read(), np.uint8), cv2.IMREAD_COLOR)
 
-        image = cv2.imdecode(np.fromstring(image_data.read(), np.uint8), cv2.IMREAD_COLOR)
-        rectangles = find_and_merge_rectangles(image, threshold_area=100)
+        rectangles = merge_rectangles_from_model_and_opencv(image, score_threshold=0.5, threshold_area=100)
         print('rectangle ', rectangles)
         rectangles = get_rectangle_vertices(rectangles)
         print(rectangles) 
