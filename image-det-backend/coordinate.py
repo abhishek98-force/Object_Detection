@@ -4,4 +4,4 @@ class Coordinate:
         self.y = y
 
     def to_dict(self):
-        return (self.x, self.y)
+        return {'x':self.x, 'y':self.y}

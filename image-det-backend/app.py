@@ -21,16 +21,16 @@ class Image(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     data_url = db.Column(db.Text, nullable=False)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
-    markers = db.relationship('Marker', backref='image')
+    polygons = db.relationship('Polygon', backref='image')
     def __repr__(self):
         return '<Image %r>' % self.id
 
-class Marker(db.Model):
+class Polygon(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     label = db.Column(db.String)
     image_id = db.Column(db.Integer, db.ForeignKey('image.id'), nullable=False)
-    coordinates = db.Column(db.JSON)
+    coords = db.Column(db.JSON)
 
     def __repr__(self):
         return '<Marker %r>' % self.id
@@ -155,7 +155,7 @@ def index():
 def insertImgAndReturnRec():
     try:
         data = request.get_json()
-
+        print('data', data)
         new_img = Image(data_url = data['image_url'])
         base64_bytes = base64.b64decode(data['image_url'])
         image_data = BytesIO(base64_bytes)
@@ -170,8 +170,8 @@ def insertImgAndReturnRec():
         for data in rectangles:
             point = [Coordinate(x, y) for (x, y) in data]
             point_dict = [coordinate.to_dict() for coordinate in point]
-            new_marker = Marker(label = '', coordinates = point_dict)
-            new_img.markers.append(new_marker)
+            new_polygon = Polygon(label = '', coords = point_dict)
+            new_img.polygons.append(new_polygon)
 
         try:
             db.session.add(new_img)
@@ -180,17 +180,17 @@ def insertImgAndReturnRec():
             image = Image.query.get(new_img.id)
             if image is None:
                 return jsonify({'error': 'Image not found'}), 404
-            for marker in image.markers:
-                    coordinates = list(marker.coordinates)
+            for polygon in image.polygons:
+                    coordinates = list(polygon.coords)
                     rectangle_objects.append({
-                            'id': marker.id,
-                            'vertices': coordinates, 
-                            'objectVal': '',  # replace with actual object value
+                            'id': polygon.id,
+                            'coords': coordinates, 
+                            'label': '',  # replace with actual object value
                             'probability': 95.0,  # replace with actual probability
                     })
             imgRectData = {
-                'id' : new_img.id,
-                'rectangles' : rectangle_objects
+                'id': new_img.id,
+                'polygons' : rectangle_objects,
             }
             jsonify_rect = jsonify(imgRectData)   
         except Exception as e:
@@ -225,25 +225,27 @@ def add_constructed_marker():
         print('request', request)
         data = request.get_json()
         print('data', data)
-        image = Image.query.get(data['id'])
+        image = Image.query.get(data['image_id'])
+        label = data['label']
         if image is None:
             return jsonify({'error': 'Image not found'}), 404
-        coordinates = data['path']
+        coordinates = data['coords']
         point = [Coordinate(coord['x'], coord['y']) for coord in coordinates]
         point_dict = [coordinate.to_dict() for coordinate in point]
-        new_marker = Marker(label = '', coordinates = point_dict)
-        image.markers.append(new_marker)
-        db.session.add(new_marker)
+        new_polygon = Polygon(label = label, coords = point_dict)
+        image.polygons.append(new_polygon)
+        db.session.add(new_polygon)
         db.session.commit()
-        marker_data = {
-            'id': new_marker.id,
-            'vertices': list(new_marker.coordinates),
-            'objectVal': '',  # replace with actual object value
+        polygon_data = {
+            'id': new_polygon.id,
+            'coords': coordinates, 
+            'label': label,  # replace with actual object value
             'probability': 95.0, 
         }
-        jsonify_rect = jsonify(marker_data)   
+        jsonify_rect = jsonify(polygon_data)   
         return jsonify_rect
-    except:
+    except Exception as e:
+        print("Error", e)
         return jsonify({'error': 'Database error'}), 500
 if __name__ == '__main__':
     app.run(app.run(host='0.0.0.0'),debug=True)
