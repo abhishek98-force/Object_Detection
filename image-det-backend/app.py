@@ -141,7 +141,7 @@ def get_rectangle_vertices(rectangles):
     rectangle_vertices = []
     for rectangle in rectangles:
        (x1, y1), (x2, y2), label = rectangle
-       rectangle_vertices.append([(x1, y1),(x2,y1),(x2, y2),(x1,y2)])
+       rectangle_vertices.append([(x1, y1),(x2,y1),(x2, y2),(x1,y2), label])
 
     print(rectangle_vertices)
     return rectangle_vertices
@@ -168,9 +168,13 @@ def insertImgAndReturnRec():
        
       
         for data in rectangles:
-            point = [Coordinate(x, y) for (x, y) in data]
+            points = data[:-1]
+            label = data[-1]
+            if isinstance(label, tuple):
+              label = str(label)
+            point = [Coordinate(x, y) for (x, y) in points]
             point_dict = [coordinate.to_dict() for coordinate in point]
-            new_polygon = Polygon(label = '', coords = point_dict)
+            new_polygon = Polygon(label = label, coords = point_dict)
             new_img.polygons.append(new_polygon)
 
         try:
@@ -185,7 +189,7 @@ def insertImgAndReturnRec():
                     rectangle_objects.append({
                             'id': polygon.id,
                             'coords': coordinates, 
-                            'label': '',  # replace with actual object value
+                            'label': polygon.label,  # replace with actual object value
                             'probability': 95.0,  # replace with actual probability
                     })
             imgRectData = {
