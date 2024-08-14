@@ -1,4 +1,5 @@
-import { Group, Text, Line, Transformer } from 'react-konva';
+import { Group, Text, Line } from 'react-konva';
+import CustomTransformer from './CustomTransformer';
 import { PolygonInnerType, PointType } from '../types';
 import React from 'react';
 import Konva from 'konva';
@@ -13,6 +14,7 @@ type NonRectanglePolygonsType = {
     origin: PointType
   ) => void;
   onClick: (event: Konva.KonvaEventObject<MouseEvent>) => void;
+  updatePolygonInner: (arg0: Number[]) => void;
 };
 export default function NonRectanglePolygons({
   polygonInner,
@@ -20,19 +22,25 @@ export default function NonRectanglePolygons({
   handleDragStart,
   handleDragEnd,
   onClick,
+  updatePolygonInner,
 }: NonRectanglePolygonsType) {
   const shapeRef = useRef<Konva.Group>(null);
   const polygonRef = useRef<Konva.Line>(null);
   const [origin, setOrigin] = useState<PointType>(null);
-  const trRef = useRef<Konva.Transformer>(null);
-  useEffect(() => {
-    if (isSelected && trRef.current !== null && shapeRef.current !== null) {
-      trRef.current.nodes([shapeRef.current]);
-      if (trRef.current.getLayer()) {
-        trRef.current.getLayer().batchDraw();
-      }
+  bringSelectedItemToTop();
+  function bringSelectedItemToTop() {
+    if (isSelected && shapeRef.current !== null) {
+      shapeRef.current.moveToTop();
     }
-  }, [isSelected, polygonInner]);
+  }
+  // useEffect(() => {
+  //   if (isSelected && trRef.current !== null && shapeRef.current !== null) {
+  //     trRef.current.nodes([shapeRef.current]);
+  //     if (trRef.current.getLayer()) {
+  //       trRef.current.getLayer().batchDraw();
+  //     }
+  //   }
+  // }, [isSelected, polygonInner]);
 
   function calculateXandY() {
     if (polygonRef.current) {
@@ -77,10 +85,13 @@ export default function NonRectanglePolygons({
           // x={origin.x}
           // y={origin.y}
         />
+        {isSelected && (
+          <CustomTransformer
+            polygonInner={polygonInner}
+            updatePolygonInner={updatePolygonInner}
+          />
+        )}
       </Group>
-      {isSelected && (
-        <Transformer ref={trRef} flipEnabled={false} rotateEnabled={false} />
-      )}
     </React.Fragment>
   );
 }

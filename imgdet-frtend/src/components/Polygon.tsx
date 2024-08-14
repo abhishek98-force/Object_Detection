@@ -166,6 +166,16 @@ export default function Polygon({
     }
   }
 
+  function updatePolygonInner(arg0: number[]) {
+    setPolygonInner((prevPolygon) => {
+      if (prevPolygon) {
+        return {
+          ...prevPolygon,
+          coords: arg0,
+        };
+      } else return prevPolygon;
+    });
+  }
   return (
     <>
       {rectangle !== undefined && (
@@ -185,6 +195,7 @@ export default function Polygon({
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
           onClick={onClick}
+          updatePolygonInner={updatePolygonInner}
         />
       )}
     </>

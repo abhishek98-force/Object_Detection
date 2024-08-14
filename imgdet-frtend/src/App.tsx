@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, Fragment, createRef } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  Fragment,
+  createRef,
+  useLayoutEffect,
+} from 'react';
 import {
   Stage,
   Layer,
@@ -24,9 +31,7 @@ import MultipleOption from './components/MultipleOption';
 
 import PolygonDrawLayer from './components/PolygonDrawLayer';
 
-const canvasWidth = 800;
-const canvasHeight = 400;
-const port = 3000;
+const port = 5000;
 
 function App() {
   const [polygons, setPolygons] = useState<PolygonType[]>([]);
@@ -40,6 +45,32 @@ function App() {
   const stageRef = useRef<Konva.Stage>(null);
   const imageid = useRef<string>('');
   const polygonLayer = createRef<Konva.Layer>();
+
+  const [canvasWidth, setCanvasWidth] = useState(0);
+  const [canvasHeight, setCanvasHeight] = useState(0);
+
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+
+  const [canvaScale, setCanvaScale] = useState(0);
+
+  useLayoutEffect(() => {
+    function updateWidth() {
+      let updatedWidth =
+        window.innerWidth > 640
+          ? 0.7 * window.innerWidth
+          : 0.8 * window.innerWidth;
+      let updatedHeight =
+        window.innerWidth > 640 ? updatedWidth / 2 : updatedWidth * 1.5;
+
+      setCanvasWidth(updatedWidth);
+      setCanvasHeight(updatedHeight);
+      console.log(updatedWidth, updatedHeight);
+    }
+    window.addEventListener('resize', updateWidth);
+    updateWidth();
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   async function updatePolygon(polygon: PolygonType) {
     const newPolygons = polygons.map((pg, index) => {
@@ -86,7 +117,29 @@ function App() {
       reader.onloadend = () => {
         const img = new window.Image();
         img.src = String(reader.result);
-        setImage(img);
+        img.onload = () => {
+          const imageRatio = img.width / img.height;
+          let newWidth = 0;
+          let newHeight = 0;
+          if (img.width > canvasWidth) {
+            newWidth = canvasWidth;
+            newHeight = canvasWidth / imageRatio;
+          } else {
+            newWidth = img.width;
+            newHeight = img.height;
+          }
+
+          let centeredX = (canvasWidth - newWidth) / 2;
+          let centeredY = (canvasHeight - newHeight) / 2;
+
+          setImagePosition({ x: centeredX, y: centeredY });
+
+          setImageSize((prev) => {
+            return { ...prev, width: newWidth, height: newHeight };
+          });
+
+          setImage(img);
+        };
       };
       reader.readAsDataURL(file);
     }
@@ -181,14 +234,42 @@ function App() {
     console.log({ polygon: polygons });
   }
 
+  function handleWheel(event: Konva.KonvaEventObject<WheelEvent>) {
+    event.evt.preventDefault();
+    const scaleBy = 1.009;
+    const stage = event.target.getStage();
+    const oldScale = stage?.scaleX();
+
+    const pointerPosition = stage?.getPointerPosition();
+    if (pointerPosition && stage && oldScale) {
+      const mousePointTo = {
+        x: (pointerPosition.x - stage?.x()) / oldScale,
+        y: (pointerPosition.y - stage.y()) / oldScale,
+      };
+
+      const newScale =
+        event.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+
+      stage?.scale({ x: newScale, y: newScale });
+      setCanvaScale(newScale);
+      const newPos = {
+        x: pointerPosition.x - mousePointTo.x * newScale,
+        y: pointerPosition.y - mousePointTo.y * newScale,
+      };
+      stage.position(newPos);
+      stage.batchDraw();
+    }
+  }
+
   return (
     <>
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          marginTop: '5%',
+          height: `${canvasHeight}px`,
+          width: `${canvasWidth}px`,
+          marginTop: '20px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
         }}
       >
         <Stage
@@ -196,13 +277,17 @@ function App() {
           height={canvasHeight}
           ref={stageRef}
           style={{ backgroundColor: 'white' }}
+          onWheel={handleWheel}
+          draggable
         >
           <Layer>
             {image && (
               <Image
+                x={imagePosition.x}
+                y={imagePosition.y}
                 image={image}
-                width={800}
-                height={400}
+                width={imageSize.width}
+                height={imageSize.height}
                 onClick={(e) => {
                   if (e.target.className === 'Image') {
                     selectShape('');
@@ -229,6 +314,7 @@ function App() {
               stageRef={stageRef.current}
               stopDrawing={stopDrawing}
               sendPolygonDataToParent={sendPolygonDataToParent}
+              canvaScale={canvaScale}
             />
           )}
         </Stage>

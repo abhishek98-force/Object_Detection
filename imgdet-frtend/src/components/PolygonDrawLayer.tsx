@@ -10,6 +10,7 @@ type PolygonDrawLayerType = {
   stageRef: Konva.Stage;
   stopDrawing: () => void;
   sendPolygonDataToParent: (arg0: any) => void;
+  canvaScale: number;
 };
 
 const canvasWidth = 800;
@@ -20,22 +21,23 @@ export default function PolygonDrawLayer({
   stageRef,
   stopDrawing,
   sendPolygonDataToParent,
+  canvaScale,
 }: PolygonDrawLayerType) {
   const [circle, setCircle] = useState<boolean>(false);
   const polygonLayer = useRef<Konva.Layer>(null);
   const circleRef = useRef<Konva.Circle>(null);
   const circleDrawn = useRef<boolean>(false);
-  const [lineCoords, setLineCoords] = useState<number[][]>([]);
+  const [lineCoords, setLineCoords] = useState<number[]>([]);
   const [circleCoord, setCircleCoord] = useState<Konva.Vector2d | null>(null);
   const [circleColor, setCircleColor] = useState<string>('red');
   async function drawCircle(e: Konva.KonvaEventObject<MouseEvent>) {
     if (stageRef) {
-      const pos = stageRef.getPointerPosition();
-      if (e.target === circleRef.current) {
+      const pos = stageRef.getRelativePointerPosition();
+      if (e.target === circleRef.current && pos) {
         circleDrawn.current = false;
         let lines = [...lineCoords];
-        lines[lines.length - 1][2] = lines[0][0];
-        lines[lines.length - 1][3] = lines[0][1];
+        lines.push(pos.x);
+        lines.push(pos.y);
         setLineCoords(lines);
         setCircleColor('green');
         await Delay(2);
@@ -47,7 +49,7 @@ export default function PolygonDrawLayer({
       }
       if (circleDrawn.current) {
         setLineCoords((lineCoords) => {
-          if (pos) return [...lineCoords, [pos.x, pos.y]];
+          if (pos) return [...lineCoords, pos.x, pos.y];
           else return lineCoords;
         });
         return;
@@ -56,7 +58,7 @@ export default function PolygonDrawLayer({
 
       setLineCoords((prevElem) => {
         if (pos) {
-          return [...prevElem, [pos?.x, pos.y]];
+          return [...prevElem, pos?.x, pos?.y];
         }
         return prevElem;
       });
@@ -66,32 +68,31 @@ export default function PolygonDrawLayer({
   }
 
   function handleExitFromPolygonLayer() {
+    let lineObject = [];
+    for (let i = 0; i < lineCoords.length; i += 2) {
+      lineObject.push({ x: lineCoords[i], y: lineCoords[i + 1] });
+    }
     let polygonProperty = {
       label: '',
-      coords: lineCoords.map((line) => {
-        return {
-          x: line[0],
-          y: line[1],
-        };
-      }),
+      coords: lineObject,
     };
     console.log({ polygonDrawn: polygonProperty });
     sendPolygonDataToParent(polygonProperty);
   }
 
-  function handleMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (!circleDrawn) return;
-    let newLines = [...lineCoords];
-    const stage = e.target.getStage();
-    if (stage !== null) {
-      const pos = stage.getPointerPosition();
-      if (pos !== null) {
-        newLines[newLines.length - 1][2] = pos.x;
-        newLines[newLines.length - 1][3] = pos.y;
-      }
-      setLineCoords(newLines);
-    }
-  }
+  // function handleMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
+  //   if (!circleDrawn) return;
+  //   let newLines = [...lineCoords];
+  //   const stage = e.target.getStage();
+  //   if (stage !== null) {
+  //     const pos = stage.getPointerPosition();
+  //     if (pos !== null) {
+  //       newLines[newLines.length - 1][2] = pos.x;
+  //       newLines[newLines.length - 1][3] = pos.y;
+  //     }
+  //     setLineCoords(newLines);
+  //   }
+  // }
 
   function propogateEventToRect(event: Konva.KonvaEventObject<MouseEvent>) {
     drawCircle(event);
@@ -102,8 +103,8 @@ export default function PolygonDrawLayer({
         width={canvasWidth}
         height={canvasHeight}
         fill="transparent"
+        stroke="blue"
         onClick={drawCircle}
-        onMouseMove={handleMouseMove}
       />
       {circle && circleCoord && (
         <Circle
@@ -116,9 +117,7 @@ export default function PolygonDrawLayer({
           stroke="red"
         />
       )}
-      {lineCoords.map((line, i) => (
-        <Line key={i} points={line} stroke="black" />
-      ))}
+      <Line points={lineCoords} stroke="black" />
     </Layer>
   );
 }
