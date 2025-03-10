@@ -14,11 +14,13 @@ identifying and demarcating objects from images and videos using sota libraries/
     ```bash
    cd visualobjects
 
-3. Build and start Docker containers:
+3. Copy yolo.onnx file from release into the yolo-service
+
+4. Build and start Docker containers:
 
     ```bash
    docker compose up -d --build
 
-4. Access the frontend through http://localhost:5173.
+5. Access the frontend through http://localhost:5173.
    
 
