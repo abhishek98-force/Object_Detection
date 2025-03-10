@@ -1,0 +1,4 @@
+build:
+  docker:
+    web: reverse-proxy/Dockerfile
+    backend: image-det-backend/Dockerfile

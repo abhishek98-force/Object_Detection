@@ -1,0 +1,54 @@
+services:
+  
+  frontend-service:
+    image: frontend_image
+    container_name: frontend_container
+    build:
+      context: ./imgdet-frtend
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./imgdet-frtend:/app
+      - /app/node_modules
+
+  backend-service:
+    image: backend_image
+    container_name: backend_container
+    build:
+      context: ./image-det-backend
+    entrypoint: ["/bin/sh", "-c", "./wait-for-it/wait-for-it.sh db:5432 -- flask db migrate && flask db upgrade && exec gunicorn --config gunicorn_config.py app:app"]
+    depends_on:
+      - yolo-service 
+      - db
+    ports:
+      - '8080:8080'
+    restart: on-failure
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  yolo-service:
+    image: yolo
+    container_name: yolo_container
+    build:
+      context: ./yolo-service
+    ports:
+      - '9000:8080'
+    restart: on-failure
+  
+  db:
+    image: postgres:latest
+    container_name: my_db
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ["CMD", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: visualobjectsdb
+
+
+

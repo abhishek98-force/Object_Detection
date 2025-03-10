@@ -1,0 +1,13 @@
+flask
+flask_sqlalchemy
+flask_cors
+numpy
+Gunicorn
+Flask-Migrate
+# torch
+setuptools
+# boto3
+python-dotenv
+# botocore
+requests
+psycopg2-binary

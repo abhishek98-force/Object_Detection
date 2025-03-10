@@ -1,0 +1,5 @@
+awslambdaric
+git+https://github.com/abhishek98-force/YOLO-ONNX.git
+numpy
+
+# onnxruntime
